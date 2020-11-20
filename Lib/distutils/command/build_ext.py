@@ -733,7 +733,7 @@ class build_ext(Command):
             # Windows like MinGW) it is simply necessary that all symbols in
             # shared libraries are resolved at link time.
             from distutils.sysconfig import get_config_var
-            link_libpython = False
+            link_libpython = True
             if get_config_var('Py_ENABLE_SHARED'):
                 # A native build on an Android device or on Cygwin
                 if hasattr(sys, 'getandroidapilevel'):
