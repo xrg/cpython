@@ -1,3 +1,6 @@
+%define git_repo python3
+%define git_head HEAD
+
 # NOTES ON BOOTSTRAPING PYTHON 3.x:
 #
 # Due to a dependency cycle between Python, rpm, pip, setuptools, wheel,
@@ -7,7 +10,8 @@
 # 1.  gdb %%bcond_with python
 # 2.  rpm-mageia-setup %%bcond_without bootstrap
 # 3.  python-rpm-generators %%bcond_without bootstrap
-# 4   python3 (if python3 is build to core/udpates_testing there's no need to use %bcond_with rpmwheels)
+# 4   python3 (if python3 is build to core/udpates_testing there's no need
+#              to use %%bcond_with rpmwheels)
 # 5.  python-setuptools %%bcond_without bootstrap
 # 6.  python-rpm-generators %%bcond_with bootstrap
 # 7.  python-pip %%bcond_without bootstrap
@@ -53,14 +57,13 @@
 # rebuild after a python abi change:
 #   python-sphinx, python-pytest, python-requests
 
-%global pybasever 3.8
+%global pybasever 3.9
 %global familyver 3
 
 # pybasever without the dot:
-%global pyshortver 38
+%global pyshortver 39
 
 # version
-%global version 3.8.5
 %global docver %{version}
 
 # comment out if not prerel
@@ -82,8 +85,8 @@
 # The versions are written in Lib/ensurepip/__init__.py, this patch removes them.
 # When the bundled setuptools/pip wheel is updated, the patch no longer applies cleanly.
 # In such cases, the patch needs to be amended and the versions updated here:
-%global pip_version 20.1.1
-%global setuptools_version 47.1.0
+%global pip_version 20.2.3
+%global setuptools_version 49.2.1
 
 # Expensive optimizations (mainly, profile-guided optimizations)
 %bcond_without optimizations
@@ -146,9 +149,9 @@
 %define develname       %mklibname python3 -d
 
 Summary:        An interpreted, interactive object-oriented programming language
-Name:           python3
-Version:        %{version}
-Release:        %mkrel %{?prerel:0.%prerel.}%{rel}
+Name:		python3
+Version:	%git_get_ver
+Release:	%mkrel %git_get_rel2
 License:        Modified CNRI Open Source License
 Group:          Development/Python
 
@@ -192,76 +195,9 @@ BuildRequires:  python-pip-wheel >= %{pip_version}
 BuildRequires: python3
 %endif
 
-Source0:        https://www.python.org/ftp/python/%{version}/Python-%{version}%{?prerel}.tar.xz
-Source1:        https://docs.python.org/%{pybasever}/archives/python-%{docver}%{?prerel}-docs-html.tar.bz2
-
-# A simple script to check timestamps of bytecode files
-# Run in check section with Python that is currently being built
-# Originally written by bkabrda
-Source8: check-pyc-timestamps.py
-
-#
-# Upstream patches
-#
-
-#
-# Fedora patches
-#
-
-# 00001 #
-# Fixup distutils/unixccompiler.py to remove standard library path from rpath:
-# Was Patch0 in ivazquez' python3000 specfile:
-Patch101: 00001-rpath.patch
-
-# 00102 #
-# Change the various install paths to use /usr/lib64/ instead or /usr/lib
-# Only used when "%%{_lib}" == "lib64"
-# Not yet sent upstream.
-Patch102: 00102-lib64.patch
-
-# 00111 #
-# Patch the Makefile.pre.in so that the generated Makefile doesn't try to build
-# a libpythonMAJOR.MINOR.a
-# See https://bugzilla.redhat.com/show_bug.cgi?id=556092
-# Downstream only: not appropriate for upstream
-Patch111: 00111-no-static-lib.patch
-
-# 00189 #
-# Instead of bundled wheels, use our RPM packaged wheels from
-# /usr/share/python-wheels
-# Downstream only: upstream bundles
-# We might eventually pursuit upstream support, but it's low prio
-Patch189: 00189-use-rpm-wheels.patch
-
-# 00251
-# Set values of prefix and exec_prefix in distutils install command
-# to /usr/local if executable is /usr/bin/python* and RPM build
-# is not detected to make pip and distutils install into separate location
-# Fedora Change: https://fedoraproject.org/wiki/Changes/Making_sudo_pip_safe
-# Downstream only: Awaiting resources to work on upstream PEP
-Patch251: 00251-change-user-install-location.patch
-
-# 00274 #
-# Upstream uses Debian-style architecture naming. Change to match Fedora.
-Patch274: 00274-fix-arch-names.patch
-
-# 00328 #
-# Restore pyc to TIMESTAMP invalidation mode as default in rpmbubild
-# See https://src.fedoraproject.org/rpms/redhat-rpm-config/pull-request/57#comment-27426
-# Downstream only: only used when building RPM packages
-# Ideally, we should talk to upstream and explain why we don't want this
-Patch328: 00328-pyc-timestamp-invalidation-mode.patch
-
-# (New patches go here ^^^)
-#
-# Mageia patches
-#
-Patch500:        python3-3.7.1-module-linkage.patch
-Patch501:        python3-3.5.2-skip-distutils-tests-that-fail-in-rpmbuild.patch
-Patch502:        python3-3.7.1-uid-gid-overflows.patch
-Patch503:        python3-3.5.2-dont-raise-from-py_compile.patch
-Patch506:        python3-3.6.2-python3-config-LIBPLUSED-cmp0004-error.patch
-Patch507:        link-C-modules-with-libpython.patch
+Source:		%git_bs_source %{name}-%{version}.tar.gz
+Source1:	%{name}-gitrpm.version
+Source2:	%{name}-changelog.gitrpm.txt
 
 Provides:       python(abi) = %{pybasever}
 Provides:       /usr/bin/python%{LDVERSION_optimized}
@@ -270,7 +206,7 @@ Requires:       python-rpm-macros >= 3-8
 Requires:       python3-rpm-macros >= 3-8
 
 Conflicts:      python < 2.7.17-2
-Conflicts:	%{_lib}python3-devel < 3.8.1
+Conflicts:	%{_lib}python3-devel < 3.9.0
 Requires:       %{lib_name} = %{version}-%{release}
 
 %description
@@ -349,14 +285,14 @@ python package will also need to be installed.  You'll probably also
 want to install the python-docs package, which contains Python
 documentation.
 
-%package        docs
+%package docs
 Summary:        Documentation for the Python programming language
 Requires:       %{name} >= %{version}
 Requires:       xdg-utils
 Group:          Development/Python
 BuildArch:      noarch
 
-%description    docs
+%description docs
 The python-docs package contains documentation on the Python
 programming language and interpreter.  The documentation is provided
 in ASCII text files and in LaTeX source files.
@@ -387,7 +323,8 @@ Requires:       tkinter3
 Various applications written using tkinter
 
 %prep
-%setup -qn Python-%{version}%{?prerel}
+%git_get_source
+%setup -q
 # Remove all exe files to ensure we are not shipping prebuilt binaries
 # note that those are only used to create Microsoft Windows installers
 # and that functionality is broken on Linux anyway
@@ -399,29 +336,17 @@ rm -r Modules/expat
 # Upstream patches
 
 # Fedora patches
-%patch101 -p1
 
 %if "%{_lib}" == "lib64"
-%patch102 -p1
 %endif
-%patch111 -p1
 
 %if %{with rpmwheels}
-%patch189 -p1
 rm Lib/ensurepip/_bundled/*.whl
 %endif
 
-%patch251 -p1
-%patch274 -p1
-%patch328 -p1
 
 # Mageia patches
 #patch500 -p1
-%patch501 -p1
-%patch502 -p1
-%patch503 -p1
-%patch506 -p1
-%patch507 -p1
 
 # Remove files that should be generated by the build
 # (This is after patching, so that we can use patches directly from upstream)
@@ -432,7 +357,7 @@ sed -i 's/^AC_PREREQ/dnl AC_PREREQ/' configure.ac
 
 # docs
 mkdir html
-bzcat %{SOURCE1} | tar x  -C html
+bzcat contrib/mageia/python-%{docver}%{?prerel}-docs-html.tar.bz2 | tar x  -C html
 
 find . -type f -print0 | xargs -0 perl -p -i -e 's@/usr/local/bin/python@/usr/bin/python3@'
 
@@ -480,6 +405,7 @@ export LDFLAGS_NODIST="%{ldflags} -fno-semantic-interposition"
 %endif
   --with-threads \
   --without-ensurepip \
+  --with-platlibdir=%{_lib} \
   %{optimizations_flag}
 
 # (misc) if the home is nfs mounted, rmdir fails due to delay
