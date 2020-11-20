@@ -101,7 +101,7 @@ do
             if [ "$PY_ENABLE_SHARED" = "0" ] ; then
                 LIBPLUSED="-L$LIBPL"
             fi
-            echo "$LIBPLUSED -L$libdir $LIBS"
+            echo "-L$libdir $LIBPLUSED $LIBS"
         ;;
         --extension-suffix)
             echo "$SO"
