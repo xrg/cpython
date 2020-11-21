@@ -78,6 +78,10 @@
 # For bootstrapping python3.x to python3.y
 %bcond_with bootstrap
 
+# makes this version default in the family (python3)
+# Otherwise can co-exist along default one
+%bcond_without family_default
+
 # Whether to use RPM build wheels from the python-{pip,setuptools}-wheel package
 # Uses upstream bundled prebuilt wheels otherwise
 %bcond_without rpmwheels
@@ -183,7 +187,7 @@ BuildRequires:  pkgconfig(liblzma)
 BuildRequires:  pkgconfig(valgrind)
 %endif
 
-BuildRequires:  systemtap-sdt-devel
+# BuildRequires:  systemtap-sdt-devel
 
 %if %{with rpmwheels}
 BuildRequires:  python-setuptools-wheel >= %{setuptools_version}
@@ -451,6 +455,7 @@ install -d -m 0755 %{buildroot}%{pylibdir}/site-packages/__pycache__
 install -d -m 0755 %{buildroot}%{_prefix}/lib/python%{pybasever}/site-packages/__pycache__
 %endif
 
+%if %{with family_default}
 # overwrite the copied binary with a link
 pushd %{buildroot}%{_bindir}
 #ln -sf python%{LDVERSION_optimized} python%{pybasever}
@@ -509,12 +514,27 @@ Type=Application
 Categories=Documentation;
 EOF
 
+%else
+# not family_default, remove symlinks to "python3"
+pushd %{buildroot}%{_bindir}
+    rm -f python3 idle3 2to3 pydoc3 pydoc3-config python3-config
+popd
+
+pushd %{buildroot}%{_libdir}
+    rm libpython3.so
+popd
+%endif
+
 # fix non real scripts
 #chmod 644 %{buildroot}%{_libdir}/python*/test/test_{binascii,grp,htmlparser}.py*
 find %{buildroot} -type f \( -name "test_binascii.py*" -o -name "test_grp.py*" -o -name "test_htmlparser.py*" \) -exec chmod 644 {} \;
 
 # fix python library not stripped
-chmod u+w %{buildroot}%{_libdir}/libpython%{lib_major}*.so.1.0 $RPM_BUILD_ROOT%{_libdir}/libpython3.so
+chmod u+w %{buildroot}%{_libdir}/libpython%{lib_major}*.so.1.0
+
+%if %{with family_default}
+chmod u+w $RPM_BUILD_ROOT%{_libdir}/libpython3.so
+%endif
 
 # Make python3-devel multilib-ready
 mv %{buildroot}%{_includedir}/python%{LDVERSION_optimized}/pyconfig.h \
@@ -543,6 +563,7 @@ sed -i -e "s/'pyconfig.h'/'pyconfig-%{__isa_bits}.h'/" \
   %{buildroot}%{pylibdir}/distutils/sysconfig.py \
   %{buildroot}%{pylibdir}/sysconfig.py
 
+%if %{with family_default}
 # Install pathfix.py to bindir
 # See https://github.com/fedora-python/python-rpm-porting/issues/24
 cp -p Tools/scripts/pathfix.py %{buildroot}%{_bindir}/
@@ -555,6 +576,8 @@ for tool in pygettext msgfmt; do
   ln -s ${tool}%{pybasever}.py %{buildroot}%{_bindir}/${tool}3.py
 done
 
+%endif
+
 # Switch all shebangs to refer to the specific Python version.
 # This currently only covers files matching ^[a-zA-Z0-9_]+\.py$,
 # so handle files named using other naming scheme separately.
@@ -563,8 +586,10 @@ LD_LIBRARY_PATH=./ ./python \
   -i "%{_bindir}/python%{pybasever}" -pn \
   %{buildroot} \
   %{buildroot}%{_bindir}/*%{pybasever}.py \
+%if %{with family_default}
   %{buildroot}%{_libdir}/python%{pybasever}/site-packages/pynche/pynche \
-  %{?with_gdb_hooks:%{buildroot}$DirHoldingGdbPy/*.py}
+%endif
+  %{?with_gdb_hooks:%{buildroot}$DirHoldingGdbPy/*.py} || :
 
 # Remove shebang lines from .py files that aren't executable, and
 # remove executability from .py files that don't have a shebang line:
@@ -618,6 +643,9 @@ EXCLUDE="$EXCLUDE test_float test_asyncio test_cmath"
 %ifarch aarch64
 EXCLUDE="$EXCLUDE test_posix test_asyncio test_openpty test_os test_pty test_readline"
 %endif
+%if %{with bootstrap}
+EXCLUDE="$EXCLUDE test_venv"
+%endif
 # json test pass on local build but fail on BS
 EXCLUDE="$EXCLUDE test_json"
 # to investigate why it fails on local build
@@ -636,17 +664,21 @@ make test TESTOPTS="-wW --slowest -j0 -u none -x $EXCLUDE"
 %endif
 
 %files
+%{_bindir}/pydoc%{pybasever}
+%{_bindir}/python%{pybasever}
+%if "%{ABIFLAGS_optimized}" != "%{nil}"
+%{_bindir}/python%{LDVERSION_optimized}
+%endif
+%{_bindir}/2to3-%{pybasever}
+%{_mandir}/man*/*
+%if %{with family_default}
 %{_bindir}/pathfix.py
 %{_bindir}/pydoc
 %{_bindir}/pydoc%{familyver}
-%{_bindir}/pydoc%{pybasever}
 %{_bindir}/python
 %{_bindir}/python%{familyver}
-%{_bindir}/python%{pybasever}
-%{_bindir}/python%{LDVERSION_optimized}
 %{_bindir}/2to3
-%{_bindir}/2to3-%{pybasever}
-%{_mandir}/man*/*
+%endif
 
 %files -n %{lib_name}-stdlib
 %license LICENSE
@@ -693,10 +725,11 @@ make test TESTOPTS="-wW --slowest -j0 -u none -x $EXCLUDE"
 %{pylibdir}/ensurepip/__pycache__/*%{bytecode_suffixes}
 
 %if %{with rpmwheels}
-%exclude %{pylibdir}/ensurepip/_bundled
+%exclude %{pylibdir}/ensurepip/
 %else
 %dir %{pylibdir}/ensurepip/_bundled
-%{pylibdir}/ensurepip/_bundled/*.whl
+%{pylibdir}/ensurepip/*
+%{pylibdir}/ensurepip/_bundled/*
 %endif
 
 %dir %{pylibdir}/concurrent/
@@ -774,6 +807,11 @@ make test TESTOPTS="-wW --slowest -j0 -u none -x $EXCLUDE"
 
 %{pylibdir}/urllib
 
+%dir %{pylibdir}/zoneinfo/
+%dir %{pylibdir}/zoneinfo/__pycache__/
+%{pylibdir}/zoneinfo/*.py
+%{pylibdir}/zoneinfo/__pycache__/*%{bytecode_suffixes}
+
 %{dynload_dir}/_bisect.%{SOABI_optimized}.so
 %{dynload_dir}/_bz2.%{SOABI_optimized}.so
 %{dynload_dir}/_codecs_cn.%{SOABI_optimized}.so
@@ -841,6 +879,8 @@ make test TESTOPTS="-wW --slowest -j0 -u none -x $EXCLUDE"
 %{dynload_dir}/_asyncio.%{SOABI_optimized}.so
 %{dynload_dir}/_blake2.%{SOABI_optimized}.so
 %{dynload_dir}/_sha3.%{SOABI_optimized}.so
+%{dynload_dir}/_zoneinfo.%{SOABI_optimized}.so
+
 
 %files -n %{lib_name}-testsuite
 %{pylibdir}/ctypes/test
@@ -864,42 +904,53 @@ make test TESTOPTS="-wW --slowest -j0 -u none -x $EXCLUDE"
 %{_libdir}/libpython%{LDVERSION_optimized}.so.1*
 
 %files -n %{develname}
-%{_bindir}/pygettext.py
-%{_bindir}/pygettext%{familyver}*.py
-
+%if %{with family_default}
 %{_bindir}/msgfmt.py
 %{_bindir}/msgfmt%{familyver}*.py
-
+%{_bindir}/pygettext.py
+%{_bindir}/pygettext%{familyver}*.py
 %{_bindir}/python-config
-%{_bindir}/python%{pybasever}-config
-%{_bindir}/python%{LDVERSION_optimized}-config
-%{_bindir}/python%{familyver}-config
-
-%{_libdir}/libpython%{LDVERSION_optimized}.so
-%{_libdir}/libpython%{pybasever}.so
 %{_libdir}/libpython%{familyver}.so
+%{_bindir}/python%{familyver}-config
+%{_libdir}/pkgconfig/python.pc
+%{_libdir}/pkgconfig/python%{familyver}{,-embed}.pc
+
+%if %{with valgrind}
+%{_libdir}/valgrind/valgrind-python3.supp
+%endif
+%else
+
+%exclude %{_libdir}/pkgconfig/python%{familyver}{,-embed}.pc
+%endif
+
+%{_bindir}/python%{pybasever}-config
+%{_libdir}/libpython%{pybasever}.so
 %{_includedir}/python%{LDVERSION_optimized}
 %exclude %{_includedir}/python%{LDVERSION_optimized}/pyconfig-%{__isa_bits}.h
 %{pylibdir}/config-%{LDVERSION_optimized}-%{_arch}-linux%{_gnu}
-%{_libdir}/pkgconfig/python.pc
-%{_libdir}/pkgconfig/python-%{LDVERSION_optimized}.pc
 %{_libdir}/pkgconfig/python-%{pybasever}{,-embed}.pc
-%{_libdir}/pkgconfig/python%{familyver}{,-embed}.pc
 
 %exclude %{pylibdir}/config-%{LDVERSION_optimized}-%{_arch}-linux%{_gnu}/Makefile
-%if %{with valgrind}
-%{_libdir}/valgrind/valgrind-python3.supp
+
+%if "%{LDVERSION_optimized}" != "%{pybasever}"
+%{_bindir}/python%{LDVERSION_optimized}-config
+%{_libdir}/libpython%{LDVERSION_optimized}.so
+%{_libdir}/pkgconfig/python-%{LDVERSION_optimized}.pc
 %endif
 
 %files docs
 %doc html/*/*
+%if %{with family_default}
 %{_datadir}/applications/%{_real_vendor}-%{name}-docs.desktop
+%endif
 
 %files -n tkinter3
 %{pylibdir}/tkinter/
 %{dynload_dir}/_tkinter.%{SOABI_optimized}.so
 %{pylibdir}/idlelib
+%if %{with family_default}
 %{site_packages}/pynche
+%endif
 %{pylibdir}/turtle.py
 %{pylibdir}/__pycache__/turtle*%{bytecode_suffixes}
 %dir %{pylibdir}/turtledemo
@@ -909,10 +960,12 @@ make test TESTOPTS="-wW --slowest -j0 -u none -x $EXCLUDE"
 %{pylibdir}/turtledemo/__pycache__/*%{bytecode_suffixes}
 
 %files -n tkinter3-apps
-%{_bindir}/idle%{familyver}
 %{_bindir}/idle%{pybasever}
+%if %{with family_default}
+%{_bindir}/idle%{familyver}
 %{_bindir}/pynche%{familyver}
 %{_datadir}/applications/%{_real_vendor}-tkinter3.desktop
+%endif
 
 # We put the debug-gdb.py file inside /usr/lib/debug to avoid noise from ldconfig
 # See https://bugzilla.redhat.com/show_bug.cgi?id=562980
