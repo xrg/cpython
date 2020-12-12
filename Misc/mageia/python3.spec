@@ -178,6 +178,7 @@ BuildRequires:  autoconf
 BuildRequires:  pkgconfig(bzip2)
 BuildRequires:  pkgconfig(sqlite3)
 BuildRequires:  pkgconfig(liblzma)
+
 # uncomment once the emacs part no longer conflict with python 2.X
 #BuildRequires: emacs
 #BuildRequires: emacs-bin
@@ -195,6 +196,10 @@ BuildRequires:  python-pip-wheel >= %{pip_version}
 %if %{without bootstrap}
 # for make regen-all and distutils.tests.test_bdist_rpm
 BuildRequires: python3
+
+# docs need specific version of sphinx
+BuildRequires:  python3-sphinx >= 2.4
+
 %endif
 
 Source:		%git_bs_source %{name}-%{version}.tar.gz
@@ -319,6 +324,7 @@ python package will also need to be installed.  You'll probably also
 want to install the python-docs package, which contains Python
 documentation.
 
+%if %{without bootstrap}
 %package docs
 Summary:        Documentation for the Python programming language
 Requires:       %{name} >= %{version}
@@ -333,6 +339,7 @@ in ASCII text files and in LaTeX source files.
 
 Install the python-docs package if you'd like to use the documentation
 for the Python language.
+%endif
 
 %package -n     tkinter3
 Summary:        A graphical user interface for the Python scripting language
@@ -378,10 +385,6 @@ rm configure pyconfig.h.in
 
 # drop Autoconf version requirement
 sed -i 's/^AC_PREREQ/dnl AC_PREREQ/' configure.ac
-
-# docs
-mkdir html
-bzcat contrib/mageia/python-%{docver}%{?prerel}-docs-html.tar.bz2 | tar x  -C html
 
 find . -type f -print0 | xargs -0 perl -p -i -e 's@/usr/local/bin/python@/usr/bin/python3@'
 
@@ -441,6 +444,13 @@ export TMP="/tmp" TMPDIR="/tmp"
 %endif
 
 %make_build EXTRA_CFLAGS="$CFLAGS" LN="ln -sf"
+
+%if %{without bootstrap}
+# Docs
+pushd Doc
+%make SPHINXBUILD='sphinx-build-3' html
+popd
+%endif
 
 %install
 
@@ -522,6 +532,7 @@ Type=Application
 Categories=Development;IDE;
 EOF
 
+%if %{without bootstrap}
 cat > %{buildroot}%{_datadir}/applications/%{_real_vendor}-%{name}-docs.desktop << EOF
 [Desktop Entry]
 Name=Python documentation
@@ -532,6 +543,7 @@ Terminal=false
 Type=Application
 Categories=Documentation;
 EOF
+%endif
 
 # fix non real scripts
 #chmod 644 %{buildroot}%{_libdir}/python*/test/test_{binascii,grp,htmlparser}.py*
@@ -939,9 +951,11 @@ make test TESTOPTS="-wW --slowest -j0 -u none -x $EXCLUDE"
 %{_libdir}/pkgconfig/python-%{LDVERSION_optimized}.pc
 %endif
 
+%if %{without bootstrap}
 %files docs
 %doc html/*/*
 %{_datadir}/applications/%{_real_vendor}-%{name}-docs.desktop
+%endif
 
 %files -n tkinter3
 %{pylibdir}/tkinter/
