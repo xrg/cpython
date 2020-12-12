@@ -147,6 +147,8 @@
 %define lib_name_orig   libpython%{familyver}
 %define lib_name        %mklibname python %{lib_major}
 %define develname       %mklibname python3 -d
+%define develname_v     %mklibname python%{pyshortver} -d
+
 
 Summary:        An interpreted, interactive object-oriented programming language
 Name:		python3
@@ -283,7 +285,7 @@ It is normally not used on its own, but as a dependency of Python %{version}.
 Summary:        The libraries and header files needed for Python development
 Group:          Development/Python
 Requires:       %{name} = %{version}-%{release}
-Requires:       %{lib_name} = %{version}-%{release}
+Requires:       %{develname_v} = %{version}-%{release}
 Provides:       %{name}-devel = %{version}-%{release}
 Provides:       %{lib_name_orig}-devel = %{version}-%{release}
 Conflicts:	%{_lib}python-devel < 2.7.17-2
@@ -291,6 +293,22 @@ Recommends:     %{lib_name}-testsuite
 Recommends:     %{name}-docs
 
 %description -n %{develname}
+The Python programming language's interpreter can be extended with
+dynamically loaded extensions and can be embedded in other programs.
+This package contains the header files and libraries needed to do
+these types of tasks.
+
+Install %{develname} if you want this version to provide the default
+development environment for python%{familyver}
+
+
+%package -n     %{develname_v}
+Summary:        The libraries and header files needed for Python development
+Group:          Development/Python
+Requires:       python%{pybasever} = %{version}-%{release}
+Requires:       %{lib_name} = %{version}-%{release}
+
+%description -n %{develname_v}
 The Python programming language's interpreter can be extended with
 dynamically loaded extensions and can be embedded in other programs.
 This package contains the header files and libraries needed to do
@@ -905,6 +923,7 @@ make test TESTOPTS="-wW --slowest -j0 -u none -x $EXCLUDE"
 %{_libdir}/valgrind/valgrind-python3.supp
 %endif
 
+%files -n %{develname_v}
 %{_bindir}/python%{pybasever}-config
 %{_libdir}/libpython%{pybasever}.so
 %{_includedir}/python%{LDVERSION_optimized}
